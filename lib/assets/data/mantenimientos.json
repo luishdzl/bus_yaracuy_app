@@ -1,0 +1,74 @@
+[
+    {
+      "id": 1,
+      "estado": "Pendiente",
+      "prioridad": "Urgente",
+      "unidad": "Unidad 101",
+      "operador": "Juan Pérez",
+      "mecanico": "Carlos Gómez",
+      "inicio": null,
+      "fin": null,
+      "duracion": null,
+      "comentario": "Necesita revisión urgente de frenos"
+    },
+    {
+      "id": 2,
+      "estado": "En Progreso",
+      "prioridad": "Alta",
+      "unidad": "Unidad 205",
+      "operador": "María Rodríguez",
+      "mecanico": "Luis Martínez",
+      "inicio": "2023-10-15",
+      "fin": null,
+      "duracion": "2 días",
+      "comentario": "Cambio de aceite y filtros en proceso"
+    },
+    {
+      "id": 3,
+      "estado": "Completado",
+      "prioridad": "Media",
+      "unidad": "Unidad 178",
+      "operador": "Pedro López",
+      "mecanico": "Ana Sánchez",
+      "inicio": "2023-10-10",
+      "fin": "2023-10-12",
+      "duracion": "3 días",
+      "comentario": "Reparación completa del sistema eléctrico"
+    },
+    {
+      "id": 4,
+      "estado": "Pendiente",
+      "prioridad": "Media",
+      "unidad": "Unidad 302",
+      "operador": "Laura García",
+      "mecanico": "Miguel Torres",
+      "inicio": null,
+      "fin": null,
+      "duracion": null,
+      "comentario": "Revisión periódica programada"
+    },
+    {
+      "id": 5,
+      "estado": "En Progreso",
+      "prioridad": "Urgente",
+      "unidad": "Unidad 115",
+      "operador": "Carlos Ruiz",
+      "mecanico": "Elena Vargas",
+      "inicio": "2023-10-18",
+      "fin": null,
+      "duracion": "1 día",
+      "comentario": "Reparación de transmisión prioritaria"
+    },
+    {
+      "id": 6,
+      "estado": "Completado",
+      "prioridad": "Baja",
+      "unidad": "Unidad 240",
+      "operador": "Sofía Mendoza",
+      "mecanico": "Jorge Herrera",
+      "inicio": "2023-10-05",
+      "fin": "2023-10-07",
+      "duracion": "3 días",
+      "comentario": "Mantenimiento preventivo completo"
+    }
+  ]

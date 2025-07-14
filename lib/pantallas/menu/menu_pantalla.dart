@@ -47,7 +47,7 @@ class _MenuPantallaState extends State<MenuPantalla>
           tabs: const [
             Tab(icon: Icon(Icons.menu), text: 'Menú'),
             Tab(icon: Icon(Icons.pending), text: 'Pendientes'),
-            Tab(icon: Icon(Icons.work), text: 'Trabajos'),
+            Tab(icon: Icon(Icons.work), text: 'En progreso'),
             Tab(icon: Icon(Icons.done_all), text: 'Completados'),
           ],
         ),
