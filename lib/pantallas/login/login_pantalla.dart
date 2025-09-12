@@ -1,4 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:http/http.dart' as http;
+import 'dart:convert';
+import 'dart:async'; // Importar para TimeoutException
 import '../menu/menu_pantalla.dart';
 
 class LoginPantalla extends StatefulWidget {
@@ -16,17 +19,26 @@ class _LoginPantallaState extends State<LoginPantalla> {
   final TextEditingController _passwordController = TextEditingController();
   String? _emailError;
   String? _passwordError;
+  String? _generalError;
+
+  // URL de tu API Next.js en Vercel
+  static const String apiUrl = 'http://localhost:3000/api/login';
 
   void _validate() {
     setState(() {
       _emailError = null;
       _passwordError = null;
-      
-      if (!_emailController.text.contains('@')) {
+      _generalError = null;
+
+      if (_emailController.text.isEmpty) {
+        _emailError = 'El email es requerido';
+      } else if (!_emailController.text.contains('@')) {
         _emailError = 'Email inválido';
       }
-      
-      if (_passwordController.text.length < 6) {
+
+      if (_passwordController.text.isEmpty) {
+        _passwordError = 'La contraseña es requerida';
+      } else if (_passwordController.text.length < 6) {
         _passwordError = 'Mínimo 6 caracteres';
       }
     });
@@ -35,17 +47,69 @@ class _LoginPantallaState extends State<LoginPantalla> {
   Future<void> _submit() async {
     _validate();
     if (_emailError != null || _passwordError != null) return;
-    
-    setState(() => _loading = true);
-    
-    // Simular proceso de autenticación
-    await Future.delayed(const Duration(seconds: 2));
-    
-    if (mounted) {
-      setState(() => _loading = false);
-      Navigator.of(context).pushReplacement(
-        MaterialPageRoute(builder: (context) => const MenuPantalla()),
-      );
+
+    setState(() {
+      _loading = true;
+      _generalError = null;
+    });
+
+    try {
+      // Preparar los datos para enviar
+      final Map<String, dynamic> requestBody = {
+        'email': _emailController.text,
+        'password': _passwordController.text,
+        'rememberMe': _rememberMe,
+      };
+
+      // Realizar la petición HTTP a tu API Next.js
+      final response = await http
+          .post(
+            Uri.parse(apiUrl),
+            headers: <String, String>{
+              'Content-Type': 'application/json; charset=UTF-8',
+            },
+            body: jsonEncode(requestBody),
+          )
+          .timeout(const Duration(seconds: 30));
+
+      // Procesar la respuesta
+      if (response.statusCode == 200) {
+        // Login exitoso
+        final Map<String, dynamic> responseData = jsonDecode(response.body);
+
+        // Aquí puedes guardar el token de autenticación si tu API lo devuelve
+        // Por ejemplo: await secureStorage.write(key: 'token', value: responseData['token']);
+
+        if (mounted) {
+          setState(() => _loading = false);
+          Navigator.of(context).pushReplacement(
+            MaterialPageRoute(builder: (context) => const MenuPantalla()),
+          );
+        }
+      } else {
+        // Error en el login
+        final Map<String, dynamic> errorData = jsonDecode(response.body);
+        setState(() {
+          _loading = false;
+          _generalError =
+              errorData['message'] ?? 'Error en el inicio de sesión';
+        });
+      }
+    } on TimeoutException catch (_) {
+      setState(() {
+        _loading = false;
+        _generalError = 'Tiempo de espera agotado. Intente nuevamente.';
+      });
+    } on http.ClientException catch (e) {
+      setState(() {
+        _loading = false;
+        _generalError = 'Error de conexión: ${e.message}';
+      });
+    } catch (e) {
+      setState(() {
+        _loading = false;
+        _generalError = 'Error inesperado: $e';
+      });
     }
   }
 
@@ -63,16 +127,14 @@ class _LoginPantallaState extends State<LoginPantalla> {
         children: [
           // Fondo con imagen
           Positioned.fill(
-            child: Image.asset(
-              'lib/assets/bg.jpg',
-              fit: BoxFit.cover,
-            ),
+            child: Image.asset('lib/assets/bg.jpg', fit: BoxFit.cover),
           ),
-          
+
           // Superposición oscura
           Positioned.fill(
             child: Container(color: Colors.black.withOpacity(0.5)),
           ),
+
           // Contenido principal
           Center(
             child: SingleChildScrollView(
@@ -110,14 +172,32 @@ class _LoginPantallaState extends State<LoginPantalla> {
                             SizedBox(height: 8),
                             Text(
                               'Ingrese sus credenciales para acceder',
-                              style: TextStyle(
-                                color: Colors.grey,
-                              ),
+                              style: TextStyle(color: Colors.grey),
                             ),
                           ],
                         ),
                         const SizedBox(height: 32),
-                        
+
+                        // Mostrar error general si existe
+                        if (_generalError != null)
+                          Container(
+                            width: double.infinity,
+                            padding: const EdgeInsets.all(12),
+                            decoration: BoxDecoration(
+                              color: Colors.red[50],
+                              borderRadius: BorderRadius.circular(8),
+                              border: Border.all(color: Colors.red[200]!),
+                            ),
+                            child: Text(
+                              _generalError!,
+                              style: TextStyle(
+                                color: Colors.red[700],
+                                fontSize: 14,
+                              ),
+                            ),
+                          ),
+                        if (_generalError != null) const SizedBox(height: 16),
+
                         // Formulario
                         Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
@@ -141,7 +221,10 @@ class _LoginPantallaState extends State<LoginPantalla> {
                                   borderRadius: BorderRadius.circular(12),
                                   borderSide: BorderSide.none,
                                 ),
-                                contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+                                contentPadding: const EdgeInsets.symmetric(
+                                  horizontal: 16,
+                                  vertical: 16,
+                                ),
                                 errorText: _emailError,
                               ),
                               keyboardType: TextInputType.emailAddress,
@@ -159,7 +242,7 @@ class _LoginPantallaState extends State<LoginPantalla> {
                                 ),
                               ),
                             const SizedBox(height: 16),
-                            
+
                             // Campo Contraseña
                             const Text(
                               'Contraseña',
@@ -180,10 +263,15 @@ class _LoginPantallaState extends State<LoginPantalla> {
                                   borderRadius: BorderRadius.circular(12),
                                   borderSide: BorderSide.none,
                                 ),
-                                contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+                                contentPadding: const EdgeInsets.symmetric(
+                                  horizontal: 16,
+                                  vertical: 16,
+                                ),
                                 suffixIcon: IconButton(
                                   icon: Icon(
-                                    _showPassword ? Icons.visibility : Icons.visibility_off,
+                                    _showPassword
+                                        ? Icons.visibility
+                                        : Icons.visibility_off,
                                     color: Colors.grey,
                                   ),
                                   onPressed: () {
@@ -208,7 +296,7 @@ class _LoginPantallaState extends State<LoginPantalla> {
                                 ),
                               ),
                             const SizedBox(height: 16),
-                            
+
                             // Recordar sesión
                             Row(
                               children: [
@@ -226,14 +314,12 @@ class _LoginPantallaState extends State<LoginPantalla> {
                                 ),
                                 const Text(
                                   'Recordar sesión',
-                                  style: TextStyle(
-                                    color: Colors.black87,
-                                  ),
+                                  style: TextStyle(color: Colors.black87),
                                 ),
                               ],
                             ),
                             const SizedBox(height: 24),
-                            
+
                             // Botón de inicio de sesión
                             SizedBox(
                               width: double.infinity,
@@ -242,11 +328,14 @@ class _LoginPantallaState extends State<LoginPantalla> {
                                 style: ElevatedButton.styleFrom(
                                   backgroundColor: Colors.red,
                                   foregroundColor: Colors.white,
-                                  padding: const EdgeInsets.symmetric(vertical: 16),
+                                  padding: const EdgeInsets.symmetric(
+                                    vertical: 16,
+                                  ),
                                   shape: RoundedRectangleBorder(
                                     borderRadius: BorderRadius.circular(12),
                                   ),
-                                  disabledBackgroundColor: Colors.red.withOpacity(0.7),
+                                  disabledBackgroundColor: Colors.red
+                                      .withOpacity(0.7),
                                 ),
                                 child: _loading
                                     ? const SizedBox(
@@ -266,7 +355,7 @@ class _LoginPantallaState extends State<LoginPantalla> {
                           ],
                         ),
                         const SizedBox(height: 32),
-                        
+
                         // Pie de página
                         Text(
                           '© ${DateTime.now().year} BUSYARACUY. Todos los derechos reservados.',
