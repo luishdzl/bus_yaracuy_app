@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../../services/mantenimiento_service.dart';
 import '../../models/mantenimiento.dart';
+import '../../services/auth_service.dart';
+import '../detalles/detalles_mantenimiento_pantalla.dart'; 
 
 class TrabajoPantalla extends StatefulWidget {
   const TrabajoPantalla({super.key});
@@ -11,16 +13,17 @@ class TrabajoPantalla extends StatefulWidget {
 }
 
 class _TrabajoPantallaState extends State<TrabajoPantalla> {
-  List<Mantenimiento> _allMantenimientos = [];
-  List<Mantenimiento> _filteredMantenimientos = [];
+  List<Mantenimiento> _mantenimientos = [];
   final TextEditingController _searchController = TextEditingController();
   bool _loading = true;
   String _error = '';
+  Map<String, dynamic>? _userData;
+  int? _personalId;
 
   @override
   void initState() {
     super.initState();
-    _cargarMantenimientos();
+    _cargarDatos();
     _searchController.addListener(_onSearchChanged);
   }
 
@@ -31,358 +34,349 @@ class _TrabajoPantallaState extends State<TrabajoPantalla> {
     super.dispose();
   }
 
-  Future<void> _cargarMantenimientos() async {
+  Future<void> _cargarDatos() async {
     try {
+      print('🔄 Iniciando carga de datos...');
+      
+      await AuthService.debugStorage();
+      
+      _userData = await AuthService.getUserData();
+      print('👤 Usuario recuperado: ${_userData?['name']}');
+      
+      _personalId = await AuthService.getPersonalId();
+      print('🔢 Personal ID obtenido: $_personalId');
+      
+      if (_personalId == null) {
+        throw Exception('No se pudo identificar al personal. Por favor, inicia sesión nuevamente.');
+      }
+
+      print('📦 Solicitando mantenimientos para personalId: $_personalId');
       final lista = await MantenimientoService.cargarMantenimientos();
+      print('✅ ${lista.length} mantenimientos recibidos');
+      
       setState(() {
-        _allMantenimientos = lista;
-        _filteredMantenimientos = lista;
+        _mantenimientos = lista;
         _loading = false;
+        _error = '';
       });
+      
     } catch (e) {
+      print('❌ Error en _cargarDatos: $e');
+      
+      await AuthService.debugStorage();
+      
       setState(() {
-        _error = 'Error al cargar mantenimientos: $e';
+        _error = e.toString().replaceAll('Exception: ', '');
         _loading = false;
       });
     }
   }
 
   void _onSearchChanged() {
-    final query = _searchController.text.toLowerCase();
-    setState(() {
-      _filteredMantenimientos = _allMantenimientos.where((m) {
-        return m.id.toString().toLowerCase().contains(query) ||
-               m.unidad.toLowerCase().contains(query) ||
-               m.operador.toLowerCase().contains(query) ||
-               m.mecanico.toLowerCase().contains(query);
-      }).toList();
-    });
+    // Implementar búsqueda si es necesario
   }
 
   void _verDetalles(Mantenimiento mantenimiento) {
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: Text('Detalles Mantenimiento #${mantenimiento.id}'),
-        content: SingleChildScrollView(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              _buildDetailRow('Unidad', mantenimiento.unidad),
-              _buildDetailRow('Operador', mantenimiento.operador),
-              _buildDetailRow('Mecánico', mantenimiento.mecanico),
-              _buildDetailRow('Prioridad', mantenimiento.prioridad),
-              _buildDetailRow('Estado', mantenimiento.estado),
-              if (mantenimiento.inicio != null && mantenimiento.inicio!.isNotEmpty)
-                _buildDetailRow('Fecha Inicio', mantenimiento.inicio!),
-              if (mantenimiento.fin != null && mantenimiento.fin!.isNotEmpty)
-                _buildDetailRow('Fecha Fin', mantenimiento.fin!),
-              if (mantenimiento.duracion != null)
-                _buildDetailRow('Duración', mantenimiento.duracion!),
-              if (mantenimiento.comentario != null && mantenimiento.comentario!.isNotEmpty)
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const SizedBox(height: 8),
-                    const Text('Comentario:', style: TextStyle(fontWeight: FontWeight.bold)),
-                    Text(mantenimiento.comentario!),
-                  ],
-                ),
-            ],
+    if (mantenimiento.id != null) {
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (context) => DetallesMantenimientoPantalla(
+            mantenimientoId: mantenimiento.id!,
           ),
         ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Cerrar'),
-          ),
-        ],
-      ),
-    );
+      );
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Error: ID de mantenimiento no disponible')),
+      );
+    }
   }
 
-  Widget _buildDetailRow(String label, String value) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 4),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text('$label: ', style: const TextStyle(fontWeight: FontWeight.bold)),
-          Expanded(child: Text(value)),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildMantenimientoCard(Mantenimiento mantenimiento, Color borderColor) {
-    // Usar fecha de inicio si está disponible, sino usar un valor por defecto
-    final fechaDisplay = mantenimiento.inicio != null && mantenimiento.inicio!.isNotEmpty
-        ? DateFormat('dd/MM/yyyy').format(DateTime.parse(mantenimiento.inicio!))
-        : 'Sin fecha';
+  String _formatDateTime(String? dateTimeString) {
+    if (dateTimeString == null || dateTimeString.isEmpty) return 'No especificada';
     
-    return Container(
-      margin: const EdgeInsets.all(4),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: borderColor, width: 1.5),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.1),
-            blurRadius: 2,
-            offset: const Offset(0, 1),
-          ),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // Encabezado con fecha e icono
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
-            decoration: BoxDecoration(
-              color: borderColor.withOpacity(0.1),
-              borderRadius: const BorderRadius.only(
-                topLeft: Radius.circular(8),
-                topRight: Radius.circular(8),
-              ),
-            ),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Text(
-                  fechaDisplay,
-                  style: const TextStyle(
-                    fontSize: 10,
-                    fontWeight: FontWeight.bold,
-                    color: Colors.red,
-                  ),
-                ),
-                const Icon(Icons.directions_bus, color: Colors.blue, size: 16),
-              ],
-            ),
-          ),
-          
-          // Contenido de la tarjeta
-          Padding(
-            padding: const EdgeInsets.all(8),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                // ID y UNIDAD
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Text(
-                      'ID: ${mantenimiento.id}',
-                      style: const TextStyle(
-                        fontSize: 11,
-                        fontWeight: FontWeight.bold,
-                        color: Colors.blue,
-                      ),
-                    ),
-                    Text(
-                      'UNIDAD: ${mantenimiento.unidad}',
-                      style: const TextStyle(
-                        fontSize: 11,
-                        fontWeight: FontWeight.bold,
-                        color: Colors.blue,
-                      ),
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ],
-                ),
-                
-                const SizedBox(height: 6),
-                
-                // Información detallada
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    _buildInfoRow('OPERADOR:', mantenimiento.operador),
-                    _buildInfoRow('MECÁNICO:', mantenimiento.mecanico),
-                    _buildInfoRow('PRIORIDAD:', mantenimiento.prioridad),
-                    _buildInfoRow('ESTADO:', mantenimiento.estado),
-                    if (mantenimiento.inicio != null && mantenimiento.inicio!.isNotEmpty)
-                      _buildInfoRow('INICIO:', _formatDateTime(mantenimiento.inicio!)),
-                    if (mantenimiento.fin != null && mantenimiento.fin!.isNotEmpty)
-                      _buildInfoRow('FIN:', _formatDateTime(mantenimiento.fin!)),
-                    if (mantenimiento.duracion != null)
-                      _buildInfoRow('DURACIÓN:', mantenimiento.duracion!),
-                  ],
-                ),
-                
-                const SizedBox(height: 8),
-                
-                // Botones de acción
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    if (mantenimiento.comentario != null && mantenimiento.comentario!.isNotEmpty)
-                      IconButton(
-                        icon: const Icon(Icons.comment, color: Colors.indigo, size: 16),
-                        padding: EdgeInsets.zero,
-                        constraints: const BoxConstraints(),
-                        onPressed: () {
-                          showDialog(
-                            context: context,
-                            builder: (context) => AlertDialog(
-                              title: const Text('Comentario'),
-                              content: Text(mantenimiento.comentario!),
-                              actions: [
-                                TextButton(
-                                  onPressed: () => Navigator.pop(context),
-                                  child: const Text('Cerrar'),
-                                ),
-                              ],
-                            ),
-                          );
-                        },
-                      ),
-                    ElevatedButton(
-                      onPressed: () => _verDetalles(mantenimiento),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.blue,
-                        foregroundColor: Colors.white,
-                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(4),
-                        ),
-                        textStyle: const TextStyle(fontSize: 10),
-                      ),
-                      child: const Text('Detalles'),
-                    ),
-                  ],
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  String _formatDateTime(String dateTimeString) {
     try {
       final dateTime = DateTime.parse(dateTimeString);
-      return DateFormat('dd/MM/yy HH:mm').format(dateTime);
+      return DateFormat('dd/MM/yyyy HH:mm').format(dateTime);
     } catch (e) {
       return dateTimeString;
     }
   }
 
-  Widget _buildInfoRow(String label, String value) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 2),
-      child: RichText(
-        text: TextSpan(
-          style: const TextStyle(fontSize: 10, color: Colors.black),
-          children: [
-            TextSpan(
-              text: '$label ',
-              style: const TextStyle(fontWeight: FontWeight.bold),
+  String _getEstado(Mantenimiento m) {
+    return m.estado ?? 'Pendiente';
+  }
+
+  Color _getEstadoColor(String estado) {
+    final estadoLower = estado.toLowerCase();
+    switch (estadoLower) {
+      case 'pendiente': return Colors.orange;
+      case 'en_proceso': 
+      case 'en progreso': return Colors.blue;
+      case 'completado': 
+      case 'finalizado': return Colors.green;
+      case 'pausado': return Colors.yellow;
+      default: return Colors.grey;
+    }
+  }
+
+  Widget _buildMantenimientoCard(Mantenimiento m, Color color) {
+    final estado = _getEstado(m);
+    
+    return GestureDetector(
+      onTap: () => _verDetalles(m),
+      child: Card(
+        elevation: 3,
+        margin: const EdgeInsets.symmetric(vertical: 8, horizontal: 16),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(12),
+          side: BorderSide(color: color.withOpacity(0.3), width: 2),
+        ),
+        child: Container(
+          decoration: BoxDecoration(
+            color: Colors.grey[50],
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: Padding(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text(
+                      'ID: ${m.id ?? "N/A"}',
+                      style: const TextStyle(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 16,
+                        color: Colors.black,
+                      ),
+                    ),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: color.withOpacity(0.1),
+                        borderRadius: BorderRadius.circular(20),
+                        border: Border.all(color: color),
+                      ),
+                      child: Text(
+                        estado,
+                        style: TextStyle(
+                          color: color,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 12),
+                Text(
+                  '🚗 Unidad: ${m.unidad ?? "No especificada"}',
+                  style: const TextStyle(fontSize: 14, color: Colors.black87),
+                ),
+                Text(
+                  '👷 Operador: ${m.operador ?? "No asignado"}',
+                  style: const TextStyle(fontSize: 14, color: Colors.black87),
+                ),
+                Text(
+                  '🔧 Mecánico: ${m.mecanico ?? "No asignado"}',
+                  style: const TextStyle(fontSize: 14, color: Colors.black87),
+                ),
+                Text(
+                  '🚦 Prioridad: ${m.prioridad ?? "No especificada"}',
+                  style: const TextStyle(fontSize: 14, color: Colors.black87),
+                ),
+                if (m.inicio != null) 
+                  Text(
+                    '⏰ Inicio: ${_formatDateTime(m.inicio)}',
+                    style: const TextStyle(fontSize: 12, color: Colors.black54),
+                  ),
+                const SizedBox(height: 16),
+                SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton(
+                    onPressed: () => _verDetalles(m),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.grey[300],
+                      foregroundColor: Colors.black,
+                      padding: const EdgeInsets.symmetric(vertical: 12),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                    ),
+                    child: const Text('Ver Detalles Completos'),
+                  ),
+                ),
+              ],
             ),
-            TextSpan(
-              text: value.length > 15 ? '${value.substring(0, 15)}...' : value,
-            ),
-          ],
+          ),
         ),
       ),
     );
   }
 
-  Widget _buildSeccion(String titulo, List<Mantenimiento> mantenimientos, Color color) {
-    if (mantenimientos.isEmpty) return const SizedBox();
-    
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          titulo,
-          style: TextStyle(
-            fontSize: 16,
-            fontWeight: FontWeight.bold,
-            color: color,
-          ),
-        ),
-        const SizedBox(height: 8),
-        GridView.builder(
-          shrinkWrap: true,
-          physics: const NeverScrollableScrollPhysics(),
-          gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-            crossAxisCount: 3, // 3 columnas
-            crossAxisSpacing: 8,
-            mainAxisSpacing: 8,
-            childAspectRatio: 0.65, // Relación de aspecto más cuadrada
-          ),
-          itemCount: mantenimientos.length,
-          itemBuilder: (context, index) {
-            return _buildMantenimientoCard(mantenimientos[index], color);
-          },
-        ),
-        const SizedBox(height: 16),
-      ],
-    );
+  Future<void> _refreshData() async {
+    setState(() {
+      _loading = true;
+      _error = '';
+    });
+    await _cargarDatos();
   }
 
   @override
   Widget build(BuildContext context) {
     if (_loading) {
-      return const Scaffold(
-        body: Center(
-          child: CircularProgressIndicator(),
+      return Scaffold(
+        appBar: AppBar(
+          title: const Text(
+            'Mis Trabajos',
+            style: TextStyle(color: Colors.black),
+          ),
+          backgroundColor: Colors.grey[300],
+          iconTheme: const IconThemeData(color: Colors.black),
+        ),
+        body: const Center(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              CircularProgressIndicator(),
+              SizedBox(height: 20),
+              Text(
+                'Cargando tus mantenimientos...',
+                style: TextStyle(color: Colors.black87),
+              ),
+            ],
+          ),
         ),
       );
     }
 
     if (_error.isNotEmpty) {
       return Scaffold(
-        appBar: AppBar(title: const Text('Mantenimientos')),
-        body: Center(
-          child: Text(_error),
+        appBar: AppBar(
+          title: const Text(
+            'Mis Trabajos',
+            style: TextStyle(color: Colors.black),
+          ),
+          backgroundColor: Colors.grey[300],
+          iconTheme: const IconThemeData(color: Colors.black),
+          actions: [
+            IconButton(
+              icon: const Icon(Icons.refresh, color: Colors.black),
+              onPressed: _refreshData,
+            ),
+          ],
         ),
-      );
-    }
-
-    // Filtrar por estado - ajusta según los estados que uses
-    final pendientes = _filteredMantenimientos.where((m) => m.estado.toLowerCase().contains('pendiente')).toList();
-    final enProgreso = _filteredMantenimientos.where((m) => m.estado.toLowerCase().contains('progreso')).toList();
-    final completados = _filteredMantenimientos.where((m) => m.estado.toLowerCase().contains('completado')).toList();
-
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Mis mantenimientos asignados'),
-        bottom: PreferredSize(
-          preferredSize: const Size.fromHeight(56),
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-            child: TextField(
-              controller: _searchController,
-              decoration: const InputDecoration(
-                hintText: 'Buscar por ID, unidad, operador o mecánico...',
-                prefixIcon: Icon(Icons.search),
-                border: OutlineInputBorder(),
-                isDense: true,
+        body: Container(
+          color: Colors.grey[100],
+          child: Center(
+            child: Padding(
+              padding: const EdgeInsets.all(20),
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  const Icon(Icons.error_outline, size: 64, color: Colors.grey),
+                  const SizedBox(height: 20),
+                  Text(
+                    _error,
+                    textAlign: TextAlign.center,
+                    style: const TextStyle(fontSize: 16, color: Colors.black87),
+                  ),
+                  const SizedBox(height: 10),
+                  if (_personalId != null)
+                    Text(
+                      'Personal ID: $_personalId',
+                      style: const TextStyle(color: Colors.black54, fontSize: 14),
+                    ),
+                  const SizedBox(height: 30),
+                  ElevatedButton(
+                    onPressed: _refreshData,
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.grey[300],
+                      foregroundColor: Colors.black,
+                      padding: const EdgeInsets.symmetric(horizontal: 30, vertical: 15),
+                    ),
+                    child: const Text('Reintentar'),
+                  ),
+                ],
               ),
             ),
           ),
         ),
+      );
+    }
+
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text(
+          'Mis Trabajos',
+          style: TextStyle(color: Colors.black),
+        ),
+        backgroundColor: Colors.grey[300],
+        iconTheme: const IconThemeData(color: Colors.black),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.refresh, color: Colors.black),
+            onPressed: _refreshData,
+          ),
+        ],
       ),
-      body: _filteredMantenimientos.isEmpty
-          ? const Center(
-              child: Text('No se encontraron mantenimientos.'),
-            )
-          : SingleChildScrollView(
-              padding: const EdgeInsets.all(12),
-              child: Column(
-                children: [
-                  _buildSeccion('Pendientes', pendientes, Colors.blue),
-                  _buildSeccion('En Progreso', enProgreso, Colors.orange),
-                  _buildSeccion('Completados', completados, Colors.green),
-                ],
-              ),
-            ),
+      body: Container(
+        color: Colors.grey[100],
+        child: RefreshIndicator(
+          onRefresh: _refreshData,
+          child: _mantenimientos.isEmpty
+              ? Center(
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      const Icon(Icons.check_circle_outline, size: 64, color: Colors.grey),
+                      const SizedBox(height: 20),
+                      const Text(
+                        '🎉 No tienes mantenimientos asignados',
+                        style: TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.black87,
+                        ),
+                        textAlign: TextAlign.center,
+                      ),
+                      const SizedBox(height: 10),
+                      Text(
+                        'Mecánico: ${_userData?['name'] ?? 'Usuario'}',
+                        style: const TextStyle(color: Colors.black54, fontSize: 14),
+                      ),
+                      if (_personalId != null)
+                        Text(
+                          'ID: $_personalId',
+                          style: const TextStyle(color: Colors.black54, fontSize: 12),
+                        ),
+                      const SizedBox(height: 30),
+                      ElevatedButton(
+                        onPressed: _refreshData,
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.grey[300],
+                          foregroundColor: Colors.black,
+                        ),
+                        child: const Text('Actualizar'),
+                      ),
+                    ],
+                  ),
+                )
+              : ListView.builder(
+                  padding: const EdgeInsets.symmetric(vertical: 16),
+                  itemCount: _mantenimientos.length,
+                  itemBuilder: (context, index) {
+                    final m = _mantenimientos[index];
+                    final estado = _getEstado(m);
+                    final color = _getEstadoColor(estado);
+                    return _buildMantenimientoCard(m, color);
+                  },
+                ),
+        ),
+      ),
     );
   }
 }

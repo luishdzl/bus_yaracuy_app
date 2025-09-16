@@ -13,6 +13,7 @@ class MenuPantalla extends StatefulWidget {
 class _MenuPantallaState extends State<MenuPantalla> {
   int _selectedIndex = 0;
   final PageController _pageController = PageController();
+  bool _menuOpen = false; // Estado para controlar el menú lateral
 
   // Lista de pantallas (solo 2 opciones)
   final List<Widget> _screens = [
@@ -50,9 +51,9 @@ class _MenuPantallaState extends State<MenuPantalla> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      // AppBar moderna con color azul oscuro
+      // AppBar con el estilo gris oscuro
       appBar: AppBar(
-        backgroundColor: const Color(0xFF0D47A1), // Azul oscuro
+        backgroundColor: const Color(0xFF374151), // bg-gray-800 equivalente
         elevation: 0,
         title: const Text(
           'BUS YARACUY',
@@ -62,6 +63,17 @@ class _MenuPantallaState extends State<MenuPantalla> {
             fontSize: 18,
           ),
         ),
+        leading: IconButton(
+          icon: Icon(
+            _menuOpen ? Icons.close : Icons.menu,
+            color: Colors.white,
+          ),
+          onPressed: () {
+            setState(() {
+              _menuOpen = !_menuOpen;
+            });
+          },
+        ),
         actions: [
           IconButton(
             icon: const Icon(Icons.logout_rounded, color: Colors.white),
@@ -70,6 +82,9 @@ class _MenuPantallaState extends State<MenuPantalla> {
         ],
       ),
 
+      // Menú lateral similar al navbar de React
+      drawer: _buildSidebarMenu(),
+
       // Cuerpo con PageView para navegación suave
       body: PageView(
         controller: _pageController,
@@ -77,7 +92,7 @@ class _MenuPantallaState extends State<MenuPantalla> {
         children: _screens,
       ),
 
-      // Bottom Navigation Bar en azul oscuro
+      // Bottom Navigation Bar en gris oscuro
       bottomNavigationBar: Container(
         decoration: const BoxDecoration(
           boxShadow: [
@@ -87,15 +102,21 @@ class _MenuPantallaState extends State<MenuPantalla> {
               spreadRadius: 1,
             ),
           ],
+          border: Border(
+            top: BorderSide(
+              color: Color(0xFF4B5563), // border-gray-700 equivalente
+              width: 1.0,
+            ),
+          ),
         ),
         child: BottomNavigationBar(
           items: _bottomNavItems,
           currentIndex: _selectedIndex,
           onTap: _onItemTapped,
           type: BottomNavigationBarType.fixed,
-          backgroundColor: const Color(0xFF0D47A1), // Azul oscuro
+          backgroundColor: const Color(0xFF374151), // bg-gray-800 equivalente
           selectedItemColor: Colors.white,
-          unselectedItemColor: Colors.white70,
+          unselectedItemColor: const Color(0xFFD1D5DB), // text-gray-300 equivalente
           selectedLabelStyle: const TextStyle(
             fontWeight: FontWeight.w600,
             fontSize: 12,
@@ -111,20 +132,159 @@ class _MenuPantallaState extends State<MenuPantalla> {
     );
   }
 
+  Widget _buildSidebarMenu() {
+    return Drawer(
+      backgroundColor: const Color(0xFF374151), // bg-gray-800 equivalente
+      width: 256, // w-64 equivalente (64 * 4 = 256)
+      child: Column(
+        children: [
+          // Logo en el navbar
+          Container(
+            height: 64,
+            decoration: const BoxDecoration(
+              border: Border(
+                bottom: BorderSide(
+                  color: Color(0xFF4B5563), // border-gray-700 equivalente
+                  width: 1.0,
+                ),
+              ),
+            ),
+            child: const Center(
+              child: Text(
+                'BUSYARACUY',
+                style: TextStyle(
+                  color: Colors.white,
+                  fontSize: 20,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ),
+          ),
+          
+          Expanded(
+            child: Padding(
+              padding: const EdgeInsets.all(16.0),
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Column(
+                    children: [
+                      // Opción Inicio
+                      _buildMenuItem(
+                        icon: Icons.home,
+                        title: 'Inicio',
+                        isActive: false,
+                        onTap: () {},
+                      ),
+                      
+                      const SizedBox(height: 16),
+                      
+                      // Aquí irían los menús dinámicos como en React
+                      // Por ahora, mostramos un placeholder
+                      const Text(
+                        'Menús dinámicos irían aquí',
+                        style: TextStyle(
+                          color: Color(0xFF9CA3AF), // text-gray-400 equivalente
+                          fontSize: 14,
+                        ),
+                      ),
+                    ],
+                  ),
+                  
+                  // Botón para colapsar el menú
+                  Container(
+                    decoration: const BoxDecoration(
+                      border: Border(
+                        top: BorderSide(
+                          color: Color(0xFF4B5563), // border-gray-700 equivalente
+                          width: 1.0,
+                        ),
+                      ),
+                    ),
+                    padding: const EdgeInsets.only(top: 16),
+                    child: SizedBox(
+                      width: double.infinity,
+                      child: ElevatedButton(
+                        onPressed: () {
+                          setState(() {
+                            _menuOpen = false;
+                          });
+                          Navigator.pop(context); // Cerrar el drawer
+                        },
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: const Color(0xFF4B5563), // bg-gray-700 equivalente
+                          foregroundColor: const Color(0xFFD1D5DB), // text-gray-300 equivalente
+                          padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                        ),
+                        child: const Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Icon(Icons.close, size: 16),
+                            SizedBox(width: 8),
+                            Text('Colapsar menú'),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildMenuItem({
+    required IconData icon,
+    required String title,
+    required bool isActive,
+    required VoidCallback onTap,
+  }) {
+    return ListTile(
+      leading: Icon(icon, color: const Color(0xFFD1D5DB)), // text-gray-300 equivalente
+      title: Text(
+        title,
+        style: TextStyle(
+          color: isActive ? Colors.white : const Color(0xFFD1D5DB), // text-gray-300 equivalente
+          fontWeight: isActive ? FontWeight.bold : FontWeight.normal,
+          fontSize: 14,
+        ),
+      ),
+      tileColor: isActive ? const Color(0xFF4B5563) : null, // bg-gray-700 equivalente
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+      onTap: onTap,
+    );
+  }
+
   void _showLogoutDialog(BuildContext context) {
     showDialog(
       context: context,
       builder: (BuildContext context) {
         return AlertDialog(
-          title: const Text('Cerrar Sesión'),
-          content: const Text('¿Estás seguro de que quieres cerrar sesión?'),
+          backgroundColor: const Color(0xFF374151), // bg-gray-800 equivalente
+          title: const Text(
+            'Cerrar Sesión',
+            style: TextStyle(color: Colors.white),
+          ),
+          content: const Text(
+            '¿Estás seguro de que quieres cerrar sesión?',
+            style: TextStyle(color: Color(0xFFD1D5DB)), // text-gray-300 equivalente
+          ),
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(16),
           ),
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(context),
-              child: const Text('Cancelar'),
+              child: const Text(
+                'Cancelar',
+                style: TextStyle(color: Color(0xFFD1D5DB)), // text-gray-300 equivalente
+              ),
             ),
             TextButton(
               onPressed: () {

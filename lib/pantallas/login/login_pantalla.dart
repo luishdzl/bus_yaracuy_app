@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
-import 'dart:async'; // Importar para TimeoutException
+import 'dart:async';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../menu/menu_pantalla.dart';
 
 class LoginPantalla extends StatefulWidget {
@@ -21,8 +23,154 @@ class _LoginPantallaState extends State<LoginPantalla> {
   String? _passwordError;
   String? _generalError;
 
-  // URL de tu API Next.js en Vercel
-  static const String apiUrl = 'http://localhost:3000/api/login';
+  final FlutterSecureStorage _secureStorage = const FlutterSecureStorage();
+  final Future<SharedPreferences> _prefs = SharedPreferences.getInstance();
+
+  // ✅ URL CORREGIDA - Cambiado localhost por tu dominio de Vercel
+  static const String apiUrl = 'https://bus-yaracuy.vercel.app/api/login';
+
+  @override
+  void initState() {
+    super.initState();
+    _loadSavedCredentials();
+  }
+
+  // Cargar credenciales guardadas
+  Future<void> _loadSavedCredentials() async {
+    try {
+      final SharedPreferences prefs = await _prefs;
+      final bool rememberMe = prefs.getBool('rememberMe') ?? false;
+      
+      if (rememberMe) {
+        final String? savedEmail = await _secureStorage.read(key: 'email');
+        final String? savedPassword = await _secureStorage.read(key: 'password');
+        
+        if (mounted) {
+          setState(() {
+            _rememberMe = rememberMe;
+            if (savedEmail != null) _emailController.text = savedEmail;
+            if (savedPassword != null) _passwordController.text = savedPassword;
+          });
+        }
+      }
+    } catch (e) {
+      print('Error loading saved credentials: $e');
+    }
+  }
+
+  // Guardar credenciales
+  Future<void> _saveCredentials() async {
+    final SharedPreferences prefs = await _prefs;
+    
+    if (_rememberMe) {
+      await _secureStorage.write(key: 'email', value: _emailController.text);
+      await _secureStorage.write(key: 'password', value: _passwordController.text);
+      await prefs.setBool('rememberMe', true);
+    } else {
+      await _secureStorage.delete(key: 'email');
+      await _secureStorage.delete(key: 'password');
+      await prefs.setBool('rememberMe', false);
+    }
+  }
+
+  // Función de debug para ver datos almacenados
+  Future<void> _debugStoredData() async {
+    try {
+      final token = await _secureStorage.read(key: 'auth_token');
+      final userDataString = await _secureStorage.read(key: 'user_data');
+      
+      print('=== DATOS ALMACENADOS DESPUÉS DEL LOGIN ===');
+      print('Token: ${token != null ? "✅" : "❌"}');
+      print('User Data: $userDataString');
+      
+      if (userDataString != null) {
+        final userData = jsonDecode(userDataString);
+        print('ID del usuario: ${userData['id'] ?? "❌ NO ENCONTRADO"}');
+        print('Nombre: ${userData['name'] ?? "N/A"}');
+        print('Email: ${userData['email'] ?? "N/A"}');
+        print('Estructura completa: $userData');
+      }
+      print('==========================================');
+    } catch (e) {
+      print('Error en debug: $e');
+    }
+  }
+
+  // Guardar datos de sesión CORREGIDO
+  Future<void> _saveSessionData(Map<String, dynamic> responseData) async {
+    try {
+      // Guardar credenciales si rememberMe está activado
+      await _saveCredentials();
+      
+      // Guardar token de autenticación
+      if (responseData['token'] != null) {
+        await _secureStorage.write(key: 'auth_token', value: responseData['token']);
+        print('✅ Token guardado correctamente');
+      }
+      
+      // Guardar datos del usuario - BUSCAR EL ID EN DIFERENTES UBICACIONES
+      Map<String, dynamic> userDataToSave = {};
+
+      // Primero intentar con responseData['user']
+      if (responseData['user'] != null && responseData['user'] is Map) {
+        userDataToSave.addAll(Map<String, dynamic>.from(responseData['user']));
+      }
+      
+      // Si no hay user, buscar en la raíz de responseData
+      if (userDataToSave.isEmpty) {
+        userDataToSave.addAll(responseData);
+      }
+
+      // Buscar el ID en diferentes campos posibles
+      final dynamic userId = userDataToSave['id'] ?? 
+                           userDataToSave['userId'] ?? 
+                           userDataToSave['user_id'] ??
+                           userDataToSave['Id'] ??
+                           userDataToSave['ID'] ??
+                           userDataToSave['iD'];
+
+      // Si no encontramos ID, usar el email como fallback (temporal)
+      if (userId == null) {
+        print('⚠️ No se encontró campo ID en la respuesta del servidor');
+        print('Estructura completa de la respuesta: $responseData');
+        
+        // Usar el email como ID temporal para testing
+        userDataToSave['id'] = _emailController.text;
+        print('⚠️ Usando email como ID temporal: ${_emailController.text}');
+      } else {
+        userDataToSave['id'] = userId.toString();
+        print('✅ ID del usuario encontrado: $userId');
+      }
+
+      // Asegurar campos básicos
+      if (!userDataToSave.containsKey('email')) {
+        userDataToSave['email'] = _emailController.text;
+      }
+
+      if (!userDataToSave.containsKey('name')) {
+        userDataToSave['name'] = _emailController.text.split('@').first;
+      }
+
+      // Guardar datos del usuario
+      await _secureStorage.write(
+        key: 'user_data', 
+        value: jsonEncode(userDataToSave)
+      );
+
+      print('✅ Datos de usuario guardados correctamente');
+
+      // Guardar timestamp de la sesión
+      final SharedPreferences prefs = await _prefs;
+      await prefs.setInt('session_timestamp', DateTime.now().millisecondsSinceEpoch);
+
+      // Debug: verificar qué se guardó
+      await _debugStoredData();
+
+    } catch (e) {
+      print('❌ Error al guardar datos de sesión: $e');
+      rethrow;
+    }
+  }
 
   void _validate() {
     setState(() {
@@ -54,14 +202,15 @@ class _LoginPantallaState extends State<LoginPantalla> {
     });
 
     try {
-      // Preparar los datos para enviar
       final Map<String, dynamic> requestBody = {
         'email': _emailController.text,
         'password': _passwordController.text,
         'rememberMe': _rememberMe,
       };
 
-      // Realizar la petición HTTP a tu API Next.js
+      print('📤 Enviando solicitud de login a: $apiUrl');
+      print('📝 Datos enviados: $requestBody');
+
       final response = await http
           .post(
             Uri.parse(apiUrl),
@@ -72,13 +221,14 @@ class _LoginPantallaState extends State<LoginPantalla> {
           )
           .timeout(const Duration(seconds: 30));
 
-      // Procesar la respuesta
-      if (response.statusCode == 200) {
-        // Login exitoso
-        final Map<String, dynamic> responseData = jsonDecode(response.body);
+      print('📥 Respuesta recibida - Status: ${response.statusCode}');
+      print('📦 Body de la respuesta: ${response.body}');
 
-        // Aquí puedes guardar el token de autenticación si tu API lo devuelve
-        // Por ejemplo: await secureStorage.write(key: 'token', value: responseData['token']);
+      final Map<String, dynamic> responseData = jsonDecode(response.body);
+
+      if (response.statusCode == 200) {
+        // Login exitoso - guardar datos de sesión
+        await _saveSessionData(responseData);
 
         if (mounted) {
           setState(() => _loading = false);
@@ -88,11 +238,11 @@ class _LoginPantallaState extends State<LoginPantalla> {
         }
       } else {
         // Error en el login
-        final Map<String, dynamic> errorData = jsonDecode(response.body);
         setState(() {
           _loading = false;
-          _generalError =
-              errorData['message'] ?? 'Error en el inicio de sesión';
+          _generalError = responseData['message'] ?? 
+                         responseData['error'] ?? 
+                         'Error en el inicio de sesión (${response.statusCode})';
         });
       }
     } on TimeoutException catch (_) {
@@ -106,9 +256,10 @@ class _LoginPantallaState extends State<LoginPantalla> {
         _generalError = 'Error de conexión: ${e.message}';
       });
     } catch (e) {
+      print('❌ Error completo: $e');
       setState(() {
         _loading = false;
-        _generalError = 'Error inesperado: $e';
+        _generalError = 'Error inesperado: ${e.toString()}';
       });
     }
   }
@@ -194,6 +345,7 @@ class _LoginPantallaState extends State<LoginPantalla> {
                                 color: Colors.red[700],
                                 fontSize: 14,
                               ),
+                              textAlign: TextAlign.center,
                             ),
                           ),
                         if (_generalError != null) const SizedBox(height: 16),

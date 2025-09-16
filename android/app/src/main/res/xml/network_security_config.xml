@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8"?>
+<network-security-config>
+    <!-- Configuración base: permite tráfico claro solo para dominios específicos -->
+    <base-config cleartextTrafficPermitted="false">
+        <trust-anchors>
+            <certificates src="system" />
+        </trust-anchors>
+    </base-config>
+    
+    <!-- Configuración de dominio: permite HTTP para desarrollo y Vercel -->
+    <domain-config cleartextTrafficPermitted="true">
+        <domain includeSubdomains="true">localhost</domain>
+        <domain includeSubdomains="true">10.0.2.2</domain> <!-- Emulador Android -->
+        <domain includeSubdomains="true">127.0.0.1</domain>
+        <domain includeSubdomains="true">bus-yaracuy.vercel.app</domain> <!-- Tu dominio de Vercel -->
+        <domain includeSubdomains="true">*.vercel.app</domain> <!-- Todos los subdominios de Vercel -->
+    </domain-config>
+    
+    <!-- Configuración para depuración: permite tráfico claro en debug -->
+    <debug-overrides>
+        <trust-anchors>
+            <certificates src="user" />
+        </trust-anchors>
+    </debug-overrides>
+</network-security-config>
